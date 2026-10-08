@@ -22,6 +22,14 @@ h2{font-family:'Bricolage Grotesque',sans-serif;font-size:19px;margin-bottom:12p
 label{display:block;font-size:14px;font-weight:600;margin:12px 0 5px}
 input[type=text],input[type=email],input[type=password]{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:16px;color:var(--ink);background:#fff}
 input:focus{outline:2px solid var(--gold);outline-offset:1px}
+select{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:16px;color:var(--ink);background:#fff}
+.bsel{margin-top:6px;padding:6px 8px;font-size:14px}
+.brand-row{display:grid;grid-template-columns:52px 1fr;gap:8px;align-items:center;margin-bottom:14px}
+.bact{grid-column:1/-1;display:flex;gap:8px}
+.bact .del{flex:1}
+.bact .arrow{flex:none;width:44px;padding:8px 0}
+.bprev{width:52px;height:52px;border:1px solid var(--line);border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.bprev img{max-width:100%;max-height:100%;object-fit:contain}
 .hint{font-size:13px;color:var(--ink-soft);margin-top:4px}
 .btn{display:block;width:100%;margin-top:16px;padding:14px;border:0;border-radius:12px;background:var(--ink);color:#fff;font:inherit;font-weight:600;font-size:16px;cursor:pointer}
 .btn:disabled{opacity:.5}
@@ -79,6 +87,8 @@ input:focus{outline:2px solid var(--gold);outline-offset:1px}
       <input id="pname" type="text" placeholder="Ej: Nike Air Max negro">
       <label for="psizes">Tallas disponibles (opcional)</label>
       <input id="psizes" type="text" placeholder="Ej: 38 al 43">
+      <label for="pbrand">Marca (opcional)</label>
+      <select id="pbrand"></select>
       <button class="btn" id="addBtn">Publicar zapato</button>
       <div class="msg" id="addMsg"></div>
     </section>
@@ -93,6 +103,10 @@ input:focus{outline:2px solid var(--gold);outline-offset:1px}
       <h2>Ajustes</h2>
       <label for="sname">Nombre del catálogo</label>
       <input id="sname" type="text">
+      <label>Marcas que vendes</label>
+      <div id="brandRows"></div>
+      <div class="hint">Cada marca aparece arriba en el catálogo, en el orden de esta lista (usa las flechas para moverlas). El logo es opcional: si no lo pones, sale el nombre.</div>
+      <button class="btn alt" id="addBrand">Agregar marca</button>
       <label>Números de WhatsApp</label>
       <div id="phones"></div>
       <div class="hint">Con código de país y sin signos. Ej: 56984237624. Cada número será un botón.</div>
@@ -124,7 +138,7 @@ const db = getDatabase(app);
 const $ = id => document.getElementById(id);
 const DEFAULT = { name: "King Shoes", phones: [{ label: "WhatsApp", number: "56984237624" }] };
 const MAX = 8;
-let started = false, staged = [];
+let started = false, staged = [], brands = [], lastProducts = null, productsLoaded = false, cfgFilled = false;
 
 function say(id, text, kind){ const el = $(id); el.textContent = text; el.className = 'msg ' + (kind || ''); }
 
@@ -207,7 +221,7 @@ $('addBtn').addEventListener('click', async () => {
     const cover = await resize(staged[0], 520, 0.7);
     const r = push(ref(db, 'products')), id = r.key;
     await set(ref(db, 'photos/' + id), staged);
-    await set(r, { name, sizes: $('psizes').value.trim(), cover, count: staged.length, createdAt: Date.now() });
+    await set(r, { name, sizes: $('psizes').value.trim(), brand: $('pbrand').value, cover, count: staged.length, createdAt: Date.now() });
     $('pname').value = ''; $('psizes').value = ''; staged = []; renderStaged();
     say('addMsg', 'Zapato publicado.', 'ok');
   }catch(err){ say('addMsg', 'No se pudo publicar. Revisa tu conexión e inténtalo otra vez.', 'err'); }
@@ -247,6 +261,16 @@ function renderItems(map){
     const n = p.count || 1;
     const s = document.createElement('span'); s.textContent = `${n} ${n === 1 ? 'foto' : 'fotos'}` + (p.sizes ? ' · Tallas: ' + p.sizes : '');
     t.append(b, s);
+    const sel = document.createElement('select'); sel.className = 'bsel'; sel.setAttribute('aria-label', 'Marca de ' + p.name);
+    const names = brands.map(x => x.name); if(p.brand && !names.includes(p.brand)) names.push(p.brand);
+    sel.append(new Option('Sin marca', ''));
+    names.forEach(nm => sel.append(new Option(nm, nm)));
+    sel.value = p.brand || '';
+    sel.addEventListener('change', async () => {
+      try{ await update(ref(db, 'products/' + p.id), { brand: sel.value }); say('listMsg', 'Marca actualizada.', 'ok'); }
+      catch(e){ say('listMsg', 'No se pudo cambiar la marca.', 'err'); }
+    });
+    t.append(sel);
     const acts = document.createElement('div'); acts.className = 'acts';
     const add = document.createElement('label'); add.className = 'del add'; add.textContent = '+ Fotos';
     const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
@@ -273,26 +297,69 @@ function phoneRow(ph = { label: '', number: '' }){
   row.append(l, n, x); $('phones').append(row);
 }
 $('addPhone').addEventListener('click', () => phoneRow());
+
+function brandRow(b = { name: '', logo: '' }){
+  const row = document.createElement('div'); row.className = 'brand-row'; row._logo = b.logo || '';
+  const pv = document.createElement('div'); pv.className = 'bprev';
+  const setPrev = () => { pv.innerHTML = ''; if(row._logo){ const im = document.createElement('img'); im.src = row._logo; im.alt = ''; pv.append(im); } };
+  setPrev();
+  const n = document.createElement('input'); n.type = 'text'; n.placeholder = 'Ej: Nike'; n.value = b.name || '';
+  const lg = document.createElement('label'); lg.className = 'del add'; lg.textContent = 'Logo';
+  const f = document.createElement('input'); f.type = 'file'; f.accept = 'image/*';
+  f.addEventListener('change', async () => {
+    const file = f.files[0]; f.value = ''; if(!file) return;
+    const url = URL.createObjectURL(file);
+    try{ row._logo = await resize(url, 220, 0.85); setPrev(); }
+    catch(e){ say('cfgMsg', 'No se pudo leer ese logo. Prueba con otro.', 'err'); }
+    finally{ URL.revokeObjectURL(url); }
+  });
+  lg.append(f);
+  const x = document.createElement('button'); x.className = 'del'; x.type = 'button'; x.textContent = 'Quitar';
+  x.addEventListener('click', () => row.remove());
+  const mk = (txt, label) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'del add arrow'; b.textContent = txt; b.setAttribute('aria-label', label); return b; };
+  const up = mk('↑', 'Subir marca'), down = mk('↓', 'Bajar marca');
+  up.addEventListener('click', () => { const pr = row.previousElementSibling; if(pr) row.parentNode.insertBefore(row, pr); });
+  down.addEventListener('click', () => { const nx = row.nextElementSibling; if(nx) row.parentNode.insertBefore(nx, row); });
+  const act = document.createElement('div'); act.className = 'bact'; act.append(up, down, lg, x);
+  row.append(pv, n, act); $('brandRows').append(row);
+}
+$('addBrand').addEventListener('click', () => brandRow());
+
+function fillBrandSelect(){
+  const sel = $('pbrand'), cur = sel.value; sel.innerHTML = '';
+  sel.append(new Option('Sin marca', ''));
+  brands.forEach(b => sel.append(new Option(b.name, b.name)));
+  sel.value = brands.some(b => b.name === cur) ? cur : '';
+}
 $('saveCfg').addEventListener('click', async () => {
   const phones = [...$('phones').children].map(r => {
     const [l, n] = r.querySelectorAll('input');
     return { label: l.value.trim(), number: n.value.replace(/\D/g, '') };
   }).filter(p => p.number);
   if(!phones.length){ return say('cfgMsg', 'Agrega al menos un número de WhatsApp.', 'err'); }
-  const cfg = { name: $('sname').value.trim() || DEFAULT.name, phones };
+  const brandsOut = [...$('brandRows').children].map(r => ({ name: r.querySelector('input[type=text]').value.trim(), logo: r._logo || '' })).filter(b => b.name);
+  const cfg = { name: $('sname').value.trim() || DEFAULT.name, phones, brands: brandsOut };
   try{ await set(ref(db, 'config'), cfg); say('cfgMsg', 'Ajustes guardados.', 'ok'); }
   catch(e){ say('cfgMsg', 'No se pudo guardar. Inténtalo otra vez.', 'err'); }
 });
 
 function start(){
-  onValue(ref(db, 'products'), s => renderItems(s.val()));
+  onValue(ref(db, 'products'), s => { lastProducts = s.val(); productsLoaded = true; renderItems(lastProducts); });
   onValue(ref(db, 'config'), s => {
     const v = s.val() || DEFAULT;
-    $('sname').value = v.name || DEFAULT.name;
-    $('phones').innerHTML = '';
-    const phones = Object.values(v.phones || {});
-    (phones.length ? phones : DEFAULT.phones).forEach(phoneRow);
-  }, { onlyOnce: true });
+    brands = Object.values(v.brands || {}).filter(b => b && b.name);
+    fillBrandSelect();
+    if(productsLoaded) renderItems(lastProducts);
+    if(!cfgFilled){
+      cfgFilled = true;
+      $('sname').value = v.name || DEFAULT.name;
+      $('phones').innerHTML = '';
+      const phones = Object.values(v.phones || {});
+      (phones.length ? phones : DEFAULT.phones).forEach(phoneRow);
+      $('brandRows').innerHTML = '';
+      brands.forEach(brandRow);
+    }
+  });
 }
 </script>
 </body>

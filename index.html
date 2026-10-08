@@ -22,6 +22,17 @@ header{background:#050505;padding-top:env(safe-area-inset-top)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .notice{max-width:952px;margin:16px 14px 0;padding:14px 16px;text-align:center;font-weight:600;font-size:15px;line-height:1.4;color:#1d1503;background:linear-gradient(135deg,#e9c55a,#d4a62f);border:1px solid #b8902f;border-radius:12px;box-shadow:0 2px 8px rgba(184,144,47,.35)}
 @media(min-width:980px){.notice{margin:16px auto 0}}
+.brands{max-width:980px;margin:16px auto 0;padding:0 14px 2px;display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.brands[hidden]{display:none}
+.brands::-webkit-scrollbar{display:none}
+.brand{flex:none;width:84px;background:none;border:0;padding:0;font:inherit;color:var(--ink);cursor:pointer;text-align:center}
+.brand .tile{display:flex;align-items:center;justify-content:center;width:84px;height:84px;background:#fff;border:2px solid var(--line);border-radius:14px;padding:10px;overflow:hidden}
+.brand .tile img{max-width:100%;max-height:100%;object-fit:contain}
+.brand .tile span{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:15px;line-height:1.1;word-break:break-word}
+.brand .lbl{display:block;margin-top:6px;font-size:13px;line-height:1.2}
+.brand.on .tile{border-color:var(--gold);box-shadow:0 0 0 2px rgba(184,144,47,.25)}
+.brand.on .lbl{font-weight:600}
+.brand:focus-visible{outline:3px solid var(--gold);outline-offset:2px;border-radius:14px}
 .tools{padding:16px 14px 6px;max-width:980px;margin:0 auto}
 .tools input{width:100%;padding:13px 16px;border:1px solid var(--line);border-radius:12px;font:inherit;font-size:16px;background:#fff;color:var(--ink)}
 .tools input:focus{outline:2px solid var(--gold);outline-offset:1px}
@@ -63,6 +74,7 @@ footer{text-align:center;color:var(--ink-soft);font-size:13px;padding:0 16px 28p
   <img class="hero" src="header.jpg" alt="King Shoes: zapatillas con corona dorada" width="1400" height="788">
 </header>
 <div class="notice">Se cotiza por WhatsApp y se encarga con un abono del 50%.</div>
+<nav class="brands" id="brands" aria-label="Marcas" hidden></nav>
 <div class="tools"><input id="search" type="search" placeholder="Buscar zapato" aria-label="Buscar zapato"></div>
 <main>
   <div class="grid" id="grid"></div>
@@ -92,9 +104,10 @@ const db = getDatabase(initializeApp(firebaseConfig));
 
 const DEFAULT = {
   name: "King Shoes",
-  phones: [{ label: "WhatsApp", number: "56984237624" }]
+  phones: [{ label: "WhatsApp", number: "56984237624" }],
+  brands: []
 };
-let config = DEFAULT, products = [], loaded = false, query = "";
+let config = DEFAULT, products = [], loaded = false, query = "", selBrand = "";
 const $ = id => document.getElementById(id);
 
 function waLink(number, name){
@@ -120,15 +133,34 @@ function renderHead(){
   document.title = config.name;
 }
 
+function renderBrands(){
+  const nav = $('brands'); nav.innerHTML = '';
+  const list = config.brands || [];
+  nav.hidden = !list.length;
+  if(selBrand && !list.some(b => b.name === selBrand)) selBrand = '';
+  for(const b of list){
+    const on = selBrand === b.name;
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'brand' + (on ? ' on' : '');
+    btn.setAttribute('aria-pressed', String(on));
+    const tile = document.createElement('span'); tile.className = 'tile';
+    if(b.logo){ const im = document.createElement('img'); im.src = b.logo; im.alt = ''; tile.append(im); }
+    else { const t = document.createElement('span'); t.textContent = b.name; tile.append(t); }
+    const lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = b.name;
+    btn.append(tile, lbl);
+    btn.addEventListener('click', () => { selBrand = on ? '' : b.name; renderBrands(); renderGrid(); });
+    nav.append(btn);
+  }
+}
+
 function renderGrid(){
   const grid = $('grid'), state = $('state');
   grid.innerHTML = "";
   const q = query.trim().toLowerCase();
-  const list = products.filter(p => !q || (p.name||"").toLowerCase().includes(q));
+  const list = products.filter(p => (!q || (p.name||"").toLowerCase().includes(q)) && (!selBrand || p.brand === selBrand));
   if(!loaded){ state.hidden = false; state.textContent = "Cargando zapatos…"; return; }
   if(!list.length){
     state.hidden = false;
-    state.textContent = products.length ? "No encontramos ese zapato. Prueba con otra palabra." : "Pronto subiremos los zapatos disponibles. Vuelve en un rato.";
+    state.textContent = !products.length ? "Pronto subiremos los zapatos disponibles. Vuelve en un rato." : (selBrand ? "Por ahora no hay zapatos de " + selBrand + "." : "No encontramos ese zapato. Prueba con otra palabra.");
     return;
   }
   state.hidden = true;
@@ -192,9 +224,9 @@ onValue(ref(db, "config"), snap => {
   const v = snap.val();
   if(v){
     const phones = Object.values(v.phones || {}).filter(p => p && p.number);
-    config = { name: v.name || DEFAULT.name, phones: phones.length ? phones : DEFAULT.phones };
+    config = { name: v.name || DEFAULT.name, phones: phones.length ? phones : DEFAULT.phones, brands: Object.values(v.brands || {}).filter(b => b && b.name) };
   } else config = DEFAULT;
-  renderHead(); renderGrid();
+  renderHead(); renderBrands(); renderGrid();
 });
 
 onValue(ref(db, "products"), snap => {
