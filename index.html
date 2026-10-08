@@ -20,6 +20,8 @@ body{font-family:'Figtree',system-ui,-apple-system,sans-serif;background:var(--p
 header{background:#050505;padding-top:env(safe-area-inset-top)}
 .hero{display:block;width:100%;max-width:980px;height:auto;margin:0 auto}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.notice{max-width:952px;margin:16px 14px 0;padding:14px 16px;text-align:center;font-weight:600;font-size:15px;line-height:1.4;color:#1d1503;background:linear-gradient(135deg,#e9c55a,#d4a62f);border:1px solid #b8902f;border-radius:12px;box-shadow:0 2px 8px rgba(184,144,47,.35)}
+@media(min-width:980px){.notice{margin:16px auto 0}}
 .tools{padding:16px 14px 6px;max-width:980px;margin:0 auto}
 .tools input{width:100%;padding:13px 16px;border:1px solid var(--line);border-radius:12px;font:inherit;font-size:16px;background:#fff;color:var(--ink)}
 .tools input:focus{outline:2px solid var(--gold);outline-offset:1px}
@@ -66,7 +68,6 @@ footer{text-align:center;color:var(--ink-soft);font-size:13px;padding:0 16px 28p
   <div class="grid" id="grid"></div>
   <div class="state" id="state">Cargando zapatos…</div>
 </main>
-<footer>Los precios se cotizan por WhatsApp.</footer>
 
 <div id="viewer" role="dialog" aria-modal="true" aria-label="Fotos del zapato">
   <div class="vbar"><div class="vtitle" id="vTitle"></div><button id="vClose" aria-label="Cerrar">×</button></div>
