@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>King Shoes</title>
+<meta name="description" content="Catálogo de zapatos King Shoes. Encarga desde Chile hacia Venezuela.">
+<meta name="theme-color" content="#050505">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#14183a; --ink-soft:#5a5f7d; --paper:#f3f5f9; --card:#ffffff;
+  --gold:#b8902f; --wa:#1a9d4f; --wa-dark:#13803f; --line:#dfe3ee;
+}
+*{box-sizing:border-box;margin:0}
+html{-webkit-text-size-adjust:100%}
+body{font-family:'Figtree',system-ui,-apple-system,sans-serif;background:var(--paper);color:var(--ink);padding-bottom:env(safe-area-inset-bottom)}
+header{background:#050505;padding-top:env(safe-area-inset-top)}
+.hero{display:block;width:100%;max-width:980px;height:auto;margin:0 auto}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.brand{display:inline-flex;align-items:center;gap:10px;font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:34px;letter-spacing:-.5px}
+.brand svg{width:30px;height:30px;fill:var(--gold)}
+.sub{margin-top:4px;font-size:14px;color:#b9bdd8}
+.notice{background:#fff7e0;color:#5d4710;font-size:14px;line-height:1.45;padding:12px 18px;text-align:center;border-bottom:1px solid #ecdca8}
+.tools{padding:16px 14px 6px;max-width:980px;margin:0 auto}
+.tools input{width:100%;padding:13px 16px;border:1px solid var(--line);border-radius:12px;font:inherit;font-size:16px;background:#fff;color:var(--ink)}
+.tools input:focus{outline:2px solid var(--gold);outline-offset:1px}
+main{max-width:980px;margin:0 auto;padding:10px 14px 40px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+@media(min-width:700px){.grid{grid-template-columns:repeat(3,1fr);gap:18px}}
+.card{background:var(--card);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;border:1px solid var(--line)}
+.photo{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;background:#e8ebf3;cursor:zoom-in}
+.info{padding:12px 12px 14px;display:flex;flex-direction:column;gap:8px;flex:1}
+.name{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:17px;line-height:1.2}
+.sizes{font-size:13px;color:var(--ink-soft)}
+.btns{display:flex;flex-direction:column;gap:6px;margin-top:auto}
+.order{display:block;text-align:center;text-decoration:none;background:var(--wa);color:#fff;font-weight:600;font-size:14px;padding:11px 8px;border-radius:10px}
+.order:active{background:var(--wa-dark)}
+.order:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.state{text-align:center;color:var(--ink-soft);padding:48px 16px;line-height:1.5}
+footer{text-align:center;color:var(--ink-soft);font-size:13px;padding:0 16px 28px}
+#lightbox{position:fixed;inset:0;background:rgba(10,12,30,.92);display:none;align-items:center;justify-content:center;z-index:10;padding:16px}
+#lightbox.on{display:flex}
+#lightbox img{max-width:100%;max-height:100%;border-radius:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="storeName" class="sr">King Shoes</h1>
+  <img class="hero" src="header.jpg" alt="King Shoes: zapatillas con corona dorada" width="1400" height="788">
+</header>
+<div class="notice" id="notice"></div>
+<div class="tools"><input id="search" type="search" placeholder="Buscar zapato" aria-label="Buscar zapato"></div>
+<main>
+  <div class="grid" id="grid"></div>
+  <div class="state" id="state">Cargando zapatos…</div>
+</main>
+<footer>Los precios se cotizan por WhatsApp.</footer>
+<div id="lightbox"><img id="lbImg" alt=""></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD2LyDzzHEsiLNu0MhJ2PPRqPScIgGtbGM",
+  authDomain: "king-shoes-a3969.firebaseapp.com",
+  databaseURL: "https://king-shoes-a3969-default-rtdb.firebaseio.com",
+  projectId: "king-shoes-a3969",
+  storageBucket: "king-shoes-a3969.firebasestorage.app",
+  messagingSenderId: "298453291461",
+  appId: "1:298453291461:web:aa4896ea3b70cdd9bdfbac"
+};
+const db = getDatabase(initializeApp(firebaseConfig));
+
+const DEFAULT = {
+  name: "King Shoes",
+  notice: "Precio según modelo, talla y peso. Se cotiza por WhatsApp y se confirma con un abono del 50%.",
+  phones: [{ label: "WhatsApp", number: "56984237624" }]
+};
+let config = DEFAULT, products = [], loaded = false, query = "";
+const $ = id => document.getElementById(id);
+
+function waLink(number, name){
+  const msg = `Hola, quiero encargar: ${name}, talla ___. ¿Me cotizas?`;
+  return `https://wa.me/${String(number).replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`;
+}
+
+function renderHead(){
+  $('storeName').textContent = config.name;
+  document.title = config.name;
+  $('notice').textContent = config.notice;
+  $('notice').hidden = !config.notice;
+}
+
+function renderGrid(){
+  const grid = $('grid'), state = $('state');
+  grid.innerHTML = "";
+  const q = query.trim().toLowerCase();
+  const list = products.filter(p => !q || (p.name||"").toLowerCase().includes(q));
+  if(!loaded){ state.hidden = false; state.textContent = "Cargando zapatos…"; return; }
+  if(!list.length){
+    state.hidden = false;
+    state.textContent = products.length ? "No encontramos ese zapato. Prueba con otra palabra." : "Pronto subiremos los zapatos disponibles. Vuelve en un rato.";
+    return;
+  }
+  state.hidden = true;
+  for(const p of list){
+    const card = document.createElement('article'); card.className = 'card';
+    const img = document.createElement('img'); img.className = 'photo'; img.loading = 'lazy';
+    img.src = p.photo; img.alt = p.name || "Zapato";
+    img.addEventListener('click', () => { $('lbImg').src = p.photo; $('lightbox').classList.add('on'); });
+    const info = document.createElement('div'); info.className = 'info';
+    const name = document.createElement('div'); name.className = 'name'; name.textContent = p.name;
+    info.append(name);
+    if(p.sizes){ const s = document.createElement('div'); s.className = 'sizes'; s.textContent = "Tallas: " + p.sizes; info.append(s); }
+    const btns = document.createElement('div'); btns.className = 'btns';
+    const phones = config.phones.length ? config.phones : DEFAULT.phones;
+    for(const ph of phones){
+      const a = document.createElement('a'); a.className = 'order';
+      a.href = waLink(ph.number, p.name); a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = phones.length > 1 ? `Encargar · ${ph.label || ph.number}` : "Encargar por WhatsApp";
+      btns.append(a);
+    }
+    info.append(btns);
+    card.append(img, info);
+    grid.append(card);
+  }
+}
+
+onValue(ref(db, "config"), snap => {
+  const v = snap.val();
+  if(v){
+    const phones = Object.values(v.phones || {}).filter(p => p && p.number);
+    config = { name: v.name || DEFAULT.name, notice: v.notice ?? DEFAULT.notice, phones: phones.length ? phones : DEFAULT.phones };
+  } else config = DEFAULT;
+  renderHead(); renderGrid();
+});
+
+onValue(ref(db, "products"), snap => {
+  const v = snap.val() || {};
+  products = Object.entries(v).map(([id, p]) => ({ id, ...p })).filter(p => p.photo && p.name)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  loaded = true; renderGrid();
+}, () => { loaded = true; products = []; $('state').textContent = "No pudimos cargar el catálogo. Revisa tu conexión e inténtalo de nuevo."; });
+
+$('search').addEventListener('input', e => { query = e.target.value; renderGrid(); });
+$('lightbox').addEventListener('click', () => $('lightbox').classList.remove('on'));
+renderHead();
+</script>
+</body>
+</html>
