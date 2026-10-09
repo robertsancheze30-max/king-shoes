@@ -103,10 +103,6 @@ select{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:1
       <h2>Ajustes</h2>
       <label for="sname">Nombre del catálogo</label>
       <input id="sname" type="text">
-      <label>Marcas que vendes</label>
-      <div id="brandRows"></div>
-      <div class="hint">Cada marca aparece arriba en el catálogo, en el orden de esta lista (usa las flechas para moverlas). El logo es opcional: si no lo pones, sale el nombre.</div>
-      <button class="btn alt" id="addBrand">Agregar marca</button>
       <label>Números de WhatsApp</label>
       <div id="phones"></div>
       <div class="hint">Con código de país y sin signos. Ej: 56984237624. Cada número será un botón.</div>
@@ -122,6 +118,7 @@ select{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:1
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, onValue, push, set, update, remove, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { BRANDS } from "./marcas.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD2LyDzzHEsiLNu0MhJ2PPRqPScIgGtbGM",
@@ -138,7 +135,7 @@ const db = getDatabase(app);
 const $ = id => document.getElementById(id);
 const DEFAULT = { name: "King Shoes", phones: [{ label: "WhatsApp", number: "56984237624" }] };
 const MAX = 8;
-let started = false, staged = [], brands = [], lastProducts = null, productsLoaded = false, cfgFilled = false;
+let started = false, staged = [], brands = BRANDS, lastProducts = null, productsLoaded = false, cfgFilled = false;
 
 function say(id, text, kind){ const el = $(id); el.textContent = text; el.className = 'msg ' + (kind || ''); }
 
@@ -298,32 +295,6 @@ function phoneRow(ph = { label: '', number: '' }){
 }
 $('addPhone').addEventListener('click', () => phoneRow());
 
-function brandRow(b = { name: '', logo: '' }){
-  const row = document.createElement('div'); row.className = 'brand-row'; row._logo = b.logo || '';
-  const pv = document.createElement('div'); pv.className = 'bprev';
-  const setPrev = () => { pv.innerHTML = ''; if(row._logo){ const im = document.createElement('img'); im.src = row._logo; im.alt = ''; pv.append(im); } };
-  setPrev();
-  const n = document.createElement('input'); n.type = 'text'; n.placeholder = 'Ej: Nike'; n.value = b.name || '';
-  const lg = document.createElement('label'); lg.className = 'del add'; lg.textContent = 'Logo';
-  const f = document.createElement('input'); f.type = 'file'; f.accept = 'image/*';
-  f.addEventListener('change', async () => {
-    const file = f.files[0]; f.value = ''; if(!file) return;
-    const url = URL.createObjectURL(file);
-    try{ row._logo = await resize(url, 220, 0.85); setPrev(); }
-    catch(e){ say('cfgMsg', 'No se pudo leer ese logo. Prueba con otro.', 'err'); }
-    finally{ URL.revokeObjectURL(url); }
-  });
-  lg.append(f);
-  const x = document.createElement('button'); x.className = 'del'; x.type = 'button'; x.textContent = 'Quitar';
-  x.addEventListener('click', () => row.remove());
-  const mk = (txt, label) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'del add arrow'; b.textContent = txt; b.setAttribute('aria-label', label); return b; };
-  const up = mk('↑', 'Subir marca'), down = mk('↓', 'Bajar marca');
-  up.addEventListener('click', () => { const pr = row.previousElementSibling; if(pr) row.parentNode.insertBefore(row, pr); });
-  down.addEventListener('click', () => { const nx = row.nextElementSibling; if(nx) row.parentNode.insertBefore(nx, row); });
-  const act = document.createElement('div'); act.className = 'bact'; act.append(up, down, lg, x);
-  row.append(pv, n, act); $('brandRows').append(row);
-}
-$('addBrand').addEventListener('click', () => brandRow());
 
 function fillBrandSelect(){
   const sel = $('pbrand'), cur = sel.value; sel.innerHTML = '';
@@ -337,28 +308,21 @@ $('saveCfg').addEventListener('click', async () => {
     return { label: l.value.trim(), number: n.value.replace(/\D/g, '') };
   }).filter(p => p.number);
   if(!phones.length){ return say('cfgMsg', 'Agrega al menos un número de WhatsApp.', 'err'); }
-  const brandsOut = [...$('brandRows').children].map(r => ({ name: r.querySelector('input[type=text]').value.trim(), logo: r._logo || '' })).filter(b => b.name);
-  const cfg = { name: $('sname').value.trim() || DEFAULT.name, phones, brands: brandsOut };
+  const cfg = { name: $('sname').value.trim() || DEFAULT.name, phones };
   try{ await set(ref(db, 'config'), cfg); say('cfgMsg', 'Ajustes guardados.', 'ok'); }
   catch(e){ say('cfgMsg', 'No se pudo guardar. Inténtalo otra vez.', 'err'); }
 });
 
 function start(){
+  fillBrandSelect();
   onValue(ref(db, 'products'), s => { lastProducts = s.val(); productsLoaded = true; renderItems(lastProducts); });
   onValue(ref(db, 'config'), s => {
+    if(cfgFilled) return; cfgFilled = true;
     const v = s.val() || DEFAULT;
-    brands = Object.values(v.brands || {}).filter(b => b && b.name);
-    fillBrandSelect();
-    if(productsLoaded) renderItems(lastProducts);
-    if(!cfgFilled){
-      cfgFilled = true;
-      $('sname').value = v.name || DEFAULT.name;
-      $('phones').innerHTML = '';
-      const phones = Object.values(v.phones || {});
-      (phones.length ? phones : DEFAULT.phones).forEach(phoneRow);
-      $('brandRows').innerHTML = '';
-      brands.forEach(brandRow);
-    }
+    $('sname').value = v.name || DEFAULT.name;
+    $('phones').innerHTML = '';
+    const phones = Object.values(v.phones || {});
+    (phones.length ? phones : DEFAULT.phones).forEach(phoneRow);
   });
 }
 </script>

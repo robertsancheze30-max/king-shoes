@@ -90,6 +90,7 @@ footer{text-align:center;color:var(--ink-soft);font-size:13px;padding:0 16px 28p
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { BRANDS } from "./marcas.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD2LyDzzHEsiLNu0MhJ2PPRqPScIgGtbGM",
@@ -135,7 +136,7 @@ function renderHead(){
 
 function renderBrands(){
   const nav = $('brands'); nav.innerHTML = '';
-  const list = config.brands || [];
+  const list = BRANDS;
   nav.hidden = !list.length;
   if(selBrand && !list.some(b => b.name === selBrand)) selBrand = '';
   for(const b of list){
